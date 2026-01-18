@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "aci_agent": "./server.py:create_real_graph"
+  },
+  "env": ".env"
+}

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACI Configurator - DEVNET-1260</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-border {
+            0%, 100% { border-color: rgba(6, 182, 212, 0.5); }
+            50% { border-color: rgba(6, 182, 212, 1); }
+        }
+        .node-active { animation: pulse-border 1s ease-in-out infinite; }
+        .typing::after {
+            content: '▊';
+            animation: blink 0.7s infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-white">
+    <div class="max-w-6xl mx-auto p-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                    ACI Configurator
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">DEVNET-1260 | RAG + MCP + LangGraph</p>
+            </div>
+            <div class="flex gap-2" id="status-badges">
+                <span class="px-3 py-1 bg-slate-700/50 rounded-full text-xs border border-slate-600">
+                    RAG: <span id="status-rag" class="text-yellow-400">checking...</span>
+                </span>
+                <span class="px-3 py-1 bg-slate-700/50 rounded-full text-xs border border-slate-600">
+                    MCP: <span id="status-mcp" class="text-yellow-400">checking...</span>
+                </span>
+                <span class="px-3 py-1 bg-slate-700/50 rounded-full text-xs border border-slate-600">
+                    LLM: <span id="status-llm" class="text-yellow-400">checking...</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Architecture Diagram -->
+        <div class="bg-slate-800/50 rounded-xl p-4 mb-6 border border-slate-700">
+            <div class="flex items-center justify-center gap-4 flex-wrap">
+                <div class="text-center px-4 py-2 bg-slate-700 rounded-lg">
+                    <div class="text-2xl">👤</div>
+                    <div class="text-xs text-slate-400">User</div>
+                </div>
+                <span class="text-slate-500 text-xl">→</span>
+                <div id="node-llm" class="text-center px-4 py-2 rounded-lg border-2 border-slate-600 bg-slate-800 transition-all duration-300">
+                    <div class="text-2xl">🤖</div>
+                    <div class="text-xs text-slate-400">LLM</div>
+                </div>
+                <div class="flex flex-col gap-1 text-slate-500">
+                    <span id="arrow-rag" class="text-sm transition-colors">→</span>
+                    <span id="arrow-mcp" class="text-sm transition-colors">→</span>
+                    <span id="arrow-build" class="text-sm transition-colors">→</span>
+                    <span id="arrow-deploy" class="text-sm transition-colors">→</span>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <div id="node-rag" class="px-3 py-1.5 rounded-lg border-2 border-slate-600 bg-slate-800 transition-all duration-300">
+                        <div class="text-lg">🔍</div>
+                        <div class="text-xs text-slate-400">RAG</div>
+                    </div>
+                    <div id="node-mcp" class="px-3 py-1.5 rounded-lg border-2 border-slate-600 bg-slate-800 transition-all duration-300">
+                        <div class="text-lg">🔧</div>
+                        <div class="text-xs text-slate-400">MCP</div>
+                    </div>
+                    <div id="node-build" class="px-3 py-1.5 rounded-lg border-2 border-slate-600 bg-slate-800 transition-all duration-300">
+                        <div class="text-lg">🏗️</div>
+                        <div class="text-xs text-slate-400">Build</div>
+                    </div>
+                    <div id="node-deploy" class="px-3 py-1.5 rounded-lg border-2 border-slate-600 bg-slate-800 transition-all duration-300">
+                        <div class="text-lg">🚀</div>
+                        <div class="text-xs text-slate-400">Deploy</div>
+                    </div>
+                </div>
+                <span class="text-slate-500 text-xl">→</span>
+                <div class="text-center px-4 py-2 bg-slate-700 rounded-lg">
+                    <div class="text-2xl">☁️</div>
+                    <div class="text-xs text-slate-400">APIC</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left: Input & Payload (smaller) -->
+            <div class="space-y-4">
+                <!-- Prompt Input -->
+                <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                    <label class="text-sm text-slate-400 mb-2 block">Natural Language Intent</label>
+                    <textarea 
+                        id="prompt-input"
+                        class="w-full bg-slate-900 rounded-lg p-3 font-mono text-sm text-cyan-300 border border-slate-600 focus:border-cyan-500 focus:outline-none resize-none"
+                        rows="2"
+                        placeholder="Describe your network intent..."
+                    >Build a three tier application with the database isolated from the internet</textarea>
+                    <button
+                        id="run-btn"
+                        onclick="runAgent()"
+                        class="mt-4 w-full py-3 rounded-lg font-semibold transition-all bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-lg shadow-cyan-500/25"
+                    >
+                        ▶ Run Agent
+                    </button>
+                </div>
+
+                <!-- Payload Output (smaller) -->
+                <div class="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                    <div class="bg-slate-700/50 px-4 py-2 border-b border-slate-600 flex items-center justify-between">
+                        <span class="text-sm text-slate-400">Generated ACI Payload</span>
+                        <span id="payload-status" class="text-xs px-2 py-0.5 rounded hidden">Ready</span>
+                    </div>
+                    <div id="payload-container" class="p-4 h-72 overflow-y-auto">
+                        <div class="h-full flex items-center justify-center text-slate-500">
+                            <div class="text-center">
+                                <div class="text-4xl mb-2">📄</div>
+                                <div>Payload will appear here</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Execution Log (bigger) -->
+            <div class="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                <div class="bg-slate-700/50 px-4 py-2 border-b border-slate-600 flex items-center gap-2">
+                    <div class="flex gap-1.5">
+                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                    </div>
+                    <span class="text-sm text-slate-400 ml-2">Agent Execution Log</span>
+                </div>
+                <div id="log-container" class="p-4 h-96 overflow-y-auto font-mono text-sm space-y-1">
+                    <div class="text-slate-500 italic">Click "Run Agent" to start...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-6 text-center text-slate-500 text-sm">
+            DEVNET-1260
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        const logContainer = document.getElementById('log-container');
+        const payloadContainer = document.getElementById('payload-container');
+        const payloadStatus = document.getElementById('payload-status');
+        const runBtn = document.getElementById('run-btn');
+
+        // Check status on load
+        async function checkStatus() {
+            try {
+                const resp = await fetch('/status');
+                const status = await resp.json();
+                
+                document.getElementById('status-rag').textContent = status.rag ? '✅' : '❌';
+                document.getElementById('status-rag').className = status.rag ? 'text-green-400' : 'text-red-400';
+                
+                document.getElementById('status-mcp').textContent = status.mcp ? '✅' : '⚠️';
+                document.getElementById('status-mcp').className = status.mcp ? 'text-green-400' : 'text-yellow-400';
+                
+                document.getElementById('status-llm').textContent = status.llm ? '✅' : '❌';
+                document.getElementById('status-llm').className = status.llm ? 'text-green-400' : 'text-red-400';
+            } catch (e) {
+                console.error('Status check failed:', e);
+            }
+        }
+        checkStatus();
+
+        function addLog(msg, type = 'info') {
+            const div = document.createElement('div');
+            div.className = getLogClass(type);
+            div.style.opacity = '0';
+            div.style.transform = 'translateY(-10px)';
+            div.style.transition = 'all 0.3s ease';
+            div.textContent = msg;
+            logContainer.appendChild(div);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                div.style.opacity = '1';
+                div.style.transform = 'translateY(0)';
+            });
+            
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function getLogClass(type) {
+            const classes = {
+                'system': 'text-slate-400',
+                'prompt': 'text-cyan-300 pl-4 italic',
+                'decision': 'text-yellow-400 font-semibold',
+                'result': 'text-slate-300 pl-4',
+                'success': 'text-green-400 font-semibold',
+                'error': 'text-red-400 font-semibold',
+                'info': 'text-slate-300'
+            };
+            return classes[type] || 'text-slate-300';
+        }
+
+        function setNodeActive(nodeId, active) {
+            const node = document.getElementById(`node-${nodeId}`);
+            const arrow = document.getElementById(`arrow-${nodeId}`);
+            
+            if (active) {
+                node.classList.add('node-active', 'border-cyan-500', 'bg-cyan-500/20', 'scale-110', 'shadow-lg');
+                node.classList.remove('border-slate-600', 'bg-slate-800');
+                if (arrow) arrow.classList.add('text-cyan-400');
+            } else {
+                node.classList.remove('node-active', 'border-cyan-500', 'bg-cyan-500/20', 'scale-110', 'shadow-lg');
+                node.classList.add('border-slate-600', 'bg-slate-800');
+                if (arrow) arrow.classList.remove('text-cyan-400');
+            }
+        }
+
+        function resetNodes() {
+            ['llm', 'rag', 'mcp', 'build', 'deploy'].forEach(n => setNodeActive(n, false));
+        }
+
+        async function runAgent() {
+            if (isRunning) return;
+            isRunning = true;
+            
+            // Reset UI
+            logContainer.innerHTML = '';
+            payloadContainer.innerHTML = '<div class="h-full flex items-center justify-center text-slate-500"><div class="text-center"><div class="text-4xl mb-2 animate-spin">⏳</div><div>Processing...</div></div></div>';
+            payloadStatus.classList.add('hidden');
+            resetNodes();
+            
+            runBtn.textContent = '⏳ Agent Running...';
+            runBtn.classList.add('cursor-not-allowed', 'opacity-75');
+            
+            const prompt = document.getElementById('prompt-input').value;
+            addLog('🚀 Starting agent with user intent:', 'system');
+            addLog(`"${prompt}"`, 'prompt');
+            addLog('', 'info');  // Empty line for spacing
+            
+            try {
+                const response = await fetch('/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, thread_id: `demo-${Date.now()}` })
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n').filter(l => l.startsWith('data: '));
+                    
+                    for (const line of lines) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            await handleEvent(data);
+                        } catch (e) {
+                            console.error('Parse error:', e);
+                        }
+                    }
+                }
+            } catch (e) {
+                addLog(`❌ Error: ${e.message}`, 'error');
+            }
+            
+            isRunning = false;
+            runBtn.textContent = '▶ Run Agent';
+            runBtn.classList.remove('cursor-not-allowed', 'opacity-75');
+            resetNodes();
+        }
+
+        const delay = ms => new Promise(r => setTimeout(r, ms));
+
+        async function handleEvent(data) {
+            switch (data.type) {
+                case 'llm':
+                    setNodeActive('llm', true);
+                    addLog(`🤖 LLM deciding next action...`, 'info');
+                    await delay(400);
+                    if (data.prompt) {
+                        addLog(`   ↳ Prompt: "${data.prompt}"`, 'result');
+                        await delay(300);
+                    }
+                    if (data.error) {
+                        addLog(`   ↳ ❌ ${data.error}`, 'error');
+                    } else {
+                        addLog(`   ↳ Decision: ${data.action.toUpperCase()}`, 'decision');
+                    }
+                    setTimeout(() => setNodeActive('llm', false), 800);
+                    break;
+                
+                case 'rag':
+                    setNodeActive('rag', true);
+                    addLog('📚 RAG: Vector search in ACI knowledge base...', 'info');
+                    await delay(400);
+                    if (data.query) {
+                        addLog(`   ↳ Query: "${data.query}"`, 'result');
+                        await delay(300);
+                    }
+                    if (data.found === false) {
+                        addLog(`   ↳ ❌ No relevant ACI objects found`, 'error');
+                        addLog(`   ↳ This doesn't appear to be an ACI-related query`, 'error');
+                    } else if (data.results && data.results.length > 0) {
+                        addLog(`   ↳ Found ${data.results.length} relevant objects:`, 'result');
+                        await delay(200);
+                        for (const r of data.results) {
+                            addLog(`      • ${r.class} (${(r.score * 100).toFixed(0)}%) - ${r.desc}`, 'result');
+                            await delay(150);
+                        }
+                    }
+                    setTimeout(() => setNodeActive('rag', false), 1200);
+                    break;
+                
+                case 'mcp':
+                    setNodeActive('mcp', true);
+                    addLog('🔧 MCP: Fetching ACI schemas from GitHub...', 'info');
+                    await delay(400);
+                    if (data.prompt) {
+                        addLog(`   ↳ For intent: "${data.prompt}..."`, 'result');
+                        await delay(300);
+                    }
+                    if (data.source) {
+                        addLog(`   ↳ Source: ${data.source}`, 'result');
+                        await delay(300);
+                    }
+                    if (data.data && !data.data.startsWith('MCP not') && !data.data.startsWith('GITHUB')) {
+                        addLog(`   ↳ Retrieved: ${data.data.slice(0, 100)}...`, 'result');
+                    } else if (data.data) {
+                        addLog(`   ↳ ${data.data}`, 'result');
+                    }
+                    setTimeout(() => setNodeActive('mcp', false), 1200);
+                    break;
+                
+                case 'build':
+                    setNodeActive('build', true);
+                    addLog('🏗️ Building ACI JSON payload with LLM...', 'info');
+                    await delay(400);
+                    if (data.prompt) {
+                        addLog(`   ↳ Intent: "${data.prompt}"`, 'result');
+                        await delay(300);
+                    }
+                    if (data.rag_classes && data.rag_classes.length > 0) {
+                        addLog(`   ↳ Using RAG objects: ${data.rag_classes.join(', ')}`, 'result');
+                        await delay(300);
+                    }
+                    if (data.method) {
+                        addLog(`   ↳ Method: ${data.method}`, 'result');
+                        await delay(300);
+                    }
+                    if (data.payload) {
+                        const tenant = data.payload.fvTenant?.attributes?.name || 'unknown';
+                        const children = data.payload.fvTenant?.children?.length || 0;
+                        addLog(`   ↳ Generated: Tenant="${tenant}" with ${children} objects`, 'success');
+                        
+                        payloadContainer.innerHTML = `<pre class="text-xs text-green-300 font-mono whitespace-pre-wrap">${JSON.stringify(data.payload, null, 2)}</pre>`;
+                        payloadStatus.textContent = data.method || 'Ready';
+                        payloadStatus.className = 'text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded';
+                        payloadStatus.classList.remove('hidden');
+                    }
+                    setTimeout(() => setNodeActive('build', false), 1200);
+                    break;
+                
+                case 'deploy':
+                    setNodeActive('deploy', true);
+                    addLog('🚀 Deploying configuration to APIC...', 'info');
+                    await delay(400);
+                    if (data.prompt) {
+                        addLog(`   ↳ For intent: "${data.prompt}..."`, 'result');
+                        await delay(300);
+                    }
+                    if (data.result) {
+                        if (data.result.status === 'success') {
+                            addLog(`   ↳ ✅ SUCCESS: ${data.result.message}`, 'success');
+                            if (data.result.dn) {
+                                await delay(200);
+                                addLog(`   ↳ DN: ${data.result.dn}`, 'result');
+                            }
+                        } else if (data.result.status === 'skipped') {
+                            addLog(`   ↳ ⚠️ SKIPPED: ${data.result.message}`, 'info');
+                        } else if (data.result.status === 'warning') {
+                            addLog(`   ↳ ⚠️ WARNING: ${data.result.message}`, 'info');
+                        } else {
+                            addLog(`   ↳ ❌ FAILED: ${data.result.message}`, 'error');
+                        }
+                    }
+                    setTimeout(() => setNodeActive('deploy', false), 1200);
+                    break;
+                
+                case 'done':
+                    await delay(500);
+                    addLog('', 'info');
+                    if (data.payload) {
+                        addLog('🎉 Agent completed successfully!', 'success');
+                        if (!payloadContainer.querySelector('pre')) {
+                            payloadContainer.innerHTML = `<pre class="text-xs text-green-300 font-mono whitespace-pre-wrap">${JSON.stringify(data.payload, null, 2)}</pre>`;
+                            payloadStatus.textContent = 'Ready';
+                            payloadStatus.className = 'text-xs px-2 py-0.5 bg-green-500/20 text-green-400 rounded';
+                            payloadStatus.classList.remove('hidden');
+                        }
+                    } else {
+                        addLog('⚠️ Agent stopped - could not generate configuration', 'error');
+                        payloadContainer.innerHTML = `<div class="h-full flex items-center justify-center text-slate-500">
+                            <div class="text-center">
+                                <div class="text-4xl mb-2">🤷</div>
+                                <div>No configuration generated</div>
+                                <div class="text-xs mt-2 text-slate-600">Try an ACI-related query like:<br>"Build a three tier app with DB isolated"</div>
+                            </div>
+                        </div>`;
+                    }
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>
